@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import { getBinance } from "./Binance";
 import chalk from "chalk";
-import { getTradeQuantityInUsd } from "./keys";
+import { getChatIdFromWatchList, getTradeQuantityInUsd } from "./keys";
 
 let isRunning = false;
 //let isConnected = false;
@@ -14,6 +14,9 @@ let isRunning = false;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const logsPath = path.join(__dirname, "../logs");
+
+const buyRegularExpression = /[#][A-Z]{1,10}[ ](Buy)[ ](Setup)/gim;
+const shortRegularExpression = /[#][A-Z]{1,10}[ ](Short)[ ](Setup)/gim;
 
 export const getTraderStatuses = () => {
   return { isRunning };
@@ -33,9 +36,9 @@ async function handler(event /*:NewMessageEvent*/) {
   if (event.originalUpdate.out) return;
   let chatId = null;
   if (event?.originalUpdate?.message?.peerId?.className === "PeerChannel") {
-    chatId = `-100${event.originalUpdate.message.peerId.channelId.toString()}`;
+    chatId = `${event.originalUpdate.message.peerId.channelId.toString()}`;
   } else if (event?.message?.peerId?.className === "PeerUser") {
-    chatId = `-100${event.message.peerId.userId.toString()}`;
+    chatId = `${event.message.peerId.userId.toString()}`;
   }
 
   const today = new Date();
@@ -45,30 +48,51 @@ async function handler(event /*:NewMessageEvent*/) {
     () => {}
   );
 
-  //if (config?.chatIds?.find((id) => id === chatId)) {
-  trade(event.message.message);
-  //}
+  const chatIdsList = await getChatIdFromWatchList();
+
+  if (chatIdsList.find((id) => id === chatId)) {
+    trade(event.message.message);
+  } else {
+    await fs.appendFile(
+      `${logsPath}/${today.getDate()}${today.getMonth()}${today.getFullYear()}.txt`,
+      `----This chat id: ${chatId} is not in the watch list\n`,
+      () => {}
+    );
+    event.message.message.split("\n").forEach((line) => {
+      if (buyRegularExpression.test(line.trim())) prepareTrading(event.message.message);
+      if (shortRegularExpression.test(line.trim())) prepareTrading(event.message.message);
+    });
+  }
 }
 
 const trade = async (messageText) => {
-  const buyRegularExpression = /[#][A-Z]{1,10}[ ](Buy)[ ](Setup)/gim;
-  const shortRegularExpression = /[#][A-Z]{1,10}[ ](Short)[ ](Setup)/gim;
-
   messageText.split("\n").forEach((line) => {
     if (buyRegularExpression.test(line.trim())) buySetup(messageText);
     if (shortRegularExpression.test(line.trim())) shortSetup(messageText);
   });
 };
 
-//#activo buy Setup
-const buySetup = async (messageLine) => {
+const prepareTrading = async (messageLine) => {
   const asset = getAsset(messageLine);
   const { binance } = getBinance();
   const { markPrice } = await binance.futuresMarkPrice(`${asset}USDT`);
   const quantityInUsd = await getTradeQuantityInUsd();
   const quantity = Math.round(quantityInUsd / markPrice);
-  const result = await binance.futuresMarketBuy(`${asset}USDT`, quantity);
+  const today = new Date();
 
+  await fs.appendFile(
+    `${logsPath}/${today.getDate()}${today.getMonth()}${today.getFullYear()}.txt`,
+    `----Trading Info ${messageLine}: asset: ${asset}USDT, Mark Price: ${markPrice},  quantity in usd: ${quantityInUsd}, trade amount: ${quantity}\n`,
+    () => {}
+  );
+  return { asset, markPrice, quantityInUsd, quantity };
+};
+
+//#activo buy Setup
+const buySetup = async (messageLine) => {
+  const { binance } = getBinance();
+  const { asset, markPrice, quantityInUsd, quantity } = await prepareTrading(messageLine);
+  const result = await binance.futuresMarketBuy(`${asset}USDT`, quantity);
   const today = new Date();
   await fs.appendFile(
     `${logsPath}/${today.getDate()}${today.getMonth()}${today.getFullYear()}.txt`,
@@ -80,11 +104,8 @@ const buySetup = async (messageLine) => {
 };
 
 const shortSetup = async (messageLine) => {
-  const asset = getAsset(messageLine);
   const { binance } = getBinance();
-  const { markPrice } = await binance.futuresMarkPrice(`${asset}USDT`);
-  const quantityInUsd = await getTradeQuantityInUsd();
-  const quantity = Math.round(quantityInUsd / markPrice);
+  const { asset, markPrice, quantityInUsd, quantity } = await prepareTrading(messageLine);
   const result = await binance.futuresMarketSell(`${asset}USDT`, quantity);
   const today = new Date();
   await fs.appendFile(

@@ -3,7 +3,15 @@ import { getTelegram, connect } from "./telegramClient";
 import { getTraderStatuses, init as initTrader } from "./trader";
 import chalk from "chalk";
 import { binanceConnect, getBinance } from "./Binance";
-import { addLaverage, addTradeQuantityInUsd, getLaverage, getTradeQuantityInUsd } from "./keys";
+import {
+  addLaverage,
+  addTradeQuantityInUsd,
+  deleteChatIdFromWatchList,
+  getLaverage,
+  getTradeQuantityInUsd,
+  printChatIdFromWatchList,
+  setChatIdToWatchList,
+} from "./keys";
 
 const menu = async () => {
   let running = true;
@@ -19,9 +27,10 @@ const menu = async () => {
     console.log("4: Leverage");
     console.log("5: Margin type");
     console.log("6: Add new group to the watch list");
-    console.log("7: Remove group from the watch list");
-    console.log("8: Start Trading");
-    console.log("9: Stop Trading");
+    console.log("7: Print watch list");
+    console.log("8: Remove group from the watch list");
+    console.log("9: Start Trading");
+    console.log("10: Stop Trading");
 
     console.log("********************************************************");
 
@@ -44,19 +53,29 @@ const menu = async () => {
       await addLaverage();
     }
 
-    if (answer === "") {
-      //console.log(getBinance());
+    if (answer === "6") {
+      await setChatIdToWatchList();
+    }
+
+    if (answer === "7") {
+      await printChatIdFromWatchList();
     }
 
     if (answer === "8") {
-      await initTrader();
+      await deleteChatIdFromWatchList();
     }
 
     if (answer === "9") {
+      await initTrader();
+    }
+
+    if (answer === "10") {
       running = false;
       console.clear();
       process.exit();
     }
+
+    await input.text("Press enter to continue....");
   }
 };
 
