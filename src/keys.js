@@ -1,5 +1,6 @@
 import { Level } from "level";
 import input from "input";
+import { setGlobalLeverage } from "./trader";
 
 const db = new Level("keys", { valueEncoding: "json", errorIfExists: false });
 
@@ -15,7 +16,11 @@ export const getTradeQuantityInUsd = async () => {
 
 export const addLaverage = async () => {
   const laverage = await input.text("Please enter the Laverage: ");
-  await db.put("laverage", parseInt(laverage));
+
+  try {
+    setGlobalLeverage(parseInt(laverage));
+    await db.put("laverage", parseInt(laverage));
+  } catch (e) {}
 };
 
 export const getLaverage = async () => {

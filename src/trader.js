@@ -15,8 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const logsPath = path.join(__dirname, "../logs");
 
-const buyRegularExpression = /[#][A-Z]{1,10}[ ](Buy)[ ](Setup)/gim;
-const shortRegularExpression = /[#][A-Z]{1,10}[ ](Short)[ ](Setup)/gim;
+const buyRegularExpression = /[#][A-Z0-9]{1,15}[ ](Buy)[ ](Setup)/gim;
+const shortRegularExpression = /[#][A-Z0-9]{1,15}[ ](Short)[ ](Setup)/gim;
 
 export const getTraderStatuses = () => {
   return { isRunning };
@@ -115,6 +115,34 @@ const shortSetup = async (messageLine) => {
     )}\n`,
     () => {}
   );
+};
+
+export const setGlobalLeverage = async (leverage) => {
+  const { binance } = getBinance();
+  if (!binance) return console.error(chalk.red("🛑 Binance is no connected"));
+  const futuresMarkPrice = await binance.futuresMarkPrice();
+  const assetsPromises = [];
+
+  if (Array.isArray(futuresMarkPrice)) {
+    futuresMarkPrice.forEach((x) => {
+      assetsPromises.push(binance.futuresLeverage("ETHUSDT", leverage));
+    });
+  }
+  try {
+    await Promise.all(assetsPromises);
+    const today = new Date();
+    await fs.appendFile(
+      `${logsPath}/${today.getDate()}${today.getMonth()}${today.getFullYear()}.txt`,
+      `All leverage set to ${leverage} \n`,
+      () => {}
+    );
+  } catch (err) {
+    await fs.appendFile(
+      `${logsPath}/${today.getDate()}${today.getMonth()}${today.getFullYear()}.txt`,
+      `Error setting leverage: ${JSON.stringify(err)} \n`,
+      () => {}
+    );
+  }
 };
 
 const getAsset = (messageLine) => {
